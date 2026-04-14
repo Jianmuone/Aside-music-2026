@@ -1,0 +1,60 @@
+name: Auto Build IPA
+
+# 触发条件：支持手动点击运行，也可以设置推送到 main 分支时自动运行
+on:
+  workflow_dispatch: 
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Compile & Package IPA
+    runs-on: macos-latest # 使用 GitHub 提供的免费 macOS 云端环境
+
+    steps:
+      # 1. 拉取代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. 准备环境配置（防止 Xcode 因为找不到 xcconfig 报错）
+      - name: Prepare Secrets.xcconfig
+        run: |
+          if [ -f "Secrets.xcconfig.example" ]; then
+            cp Secrets.xcconfig.example Secrets.xcconfig
+            echo "已从示例文件创建 Secrets.xcconfig"
+          else
+            # 如果没有示例文件，创建一个空的防止编译中断
+            touch Secrets.xcconfig
+            echo "已创建空的 Secrets.xcconfig"
+          fi
+
+      # 3. 安装可能需要的依赖工具（如 ldid 伪签名工具）
+      - name: Install Dependencies
+        run: |
+          brew install ldid
+
+      # 4. 赋予脚本执行权限并运行打包脚本
+      - name: Run Build Script
+        run: |
+          chmod +x build_ipa.sh
+          ./build_ipa.sh
+
+      # 5. 检查 ipa 是否生成成功
+      - name: Verify IPA
+        run: |
+          if [ -f "AsideMusic.ipa" ]; then
+            echo "✅ IPA 打包成功！"
+            ls -lh AsideMusic.ipa
+          else
+            echo "❌ 打包失败，未找到 AsideMusic.ipa"
+            exit 1
+          fi
+
+      # 6. 将 ipa 文件上传到 GitHub Actions 的 Artifacts 供下载
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AsideMusic_IPA
+          path: AsideMusic.ipa
+          if-no-files-found: error
